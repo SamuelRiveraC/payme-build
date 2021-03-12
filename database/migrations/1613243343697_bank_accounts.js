@@ -13,7 +13,7 @@ class BankAccounts extends Schema_1.default {
         this.schema.createTable(this.tableName, (table) => {
             table.increments('id');
             table.string('alias').notNullable();
-            table.string('iban').notNullable();
+            table.string('iban').notNullable().unique();
             table.string('bic').notNullable();
             table.string('primary').notNullable();
             table.float('balance').unsigned();
