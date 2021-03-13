@@ -8,6 +8,7 @@ const User_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/User"))
 const BankAccount_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/BankAccount"));
 const Transaction_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/Transaction"));
 const Notification_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/Notification"));
+const GetToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/GetToken"));
 class TransactionsController {
     async store({ auth, request, response }) {
         const user = await auth.authenticate();
@@ -58,6 +59,8 @@ class TransactionsController {
                 openBanking = { status: 200 };
             }
             if (request.input("bank") === "deutschebank") {
+                let DBToken = await GetToken_1.default(user, "access_token", "deutschebank");
+                console.log(DBToken);
                 openBanking = await axios_1.default.post("https://simulator-api.db.com/gw/dbapi/paymentInitiation/payments/v1/instantSepaCreditTransfers", {
                     "debtorAccount": {
                         "iban": senderAccount.iban, "currencyCode": "EUR"
@@ -69,24 +72,19 @@ class TransactionsController {
                     "creditorAccount": {
                         "iban": receiverAccount.iban, "currencyCode": "EUR"
                     }
-                }, { headers: { Authorization: request.input("token"), otp: request.input("otp"), 'idempotency-id': transaction.uuid, } }).then(async (response) => {
+                }, { headers: { Authorization: DBToken, otp: request.input("otp"), 'idempotency-id': transaction.uuid, } }).then(async (response) => {
                     if (response.status === 200 || response.status === 201) {
                         return response;
                     }
                 }).catch((error) => { return error.response; });
             }
-            if (openBanking.status == 200 || openBanking.status == 201) {
-                transaction.status = "1";
-                await transaction.save();
-                await senderAccount.save();
-                await receiverAccount.save();
-                newNotification.transaction_id = transaction.id;
-                await Notification_1.default.create(newNotification);
-                return transaction;
-            }
-            else {
-                return response.status(openBanking.status).send(openBanking);
-            }
+            transaction.status = "1";
+            await transaction.save();
+            await senderAccount.save();
+            await receiverAccount.save();
+            newNotification.transaction_id = transaction.id;
+            await Notification_1.default.create(newNotification);
+            return transaction;
         }
         return response.status(400).send({ code: "E_BAD_REQUEST" });
     }

@@ -14,7 +14,7 @@ class UsersController {
         }).preload("bankAccounts");
         return users;
     }
-    async getSelfData({ auth }) {
+    async refreshData({ auth }) {
         const user = await auth.authenticate();
         await user.preload('bankAccounts');
         await user.preload('transactionsSent', (query) => {
