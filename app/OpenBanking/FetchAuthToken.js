@@ -7,7 +7,13 @@ const qs_1 = __importDefault(require("qs"));
 const axios_1 = __importDefault(require("axios"));
 const GetToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/GetToken"));
 const IPADDRESS = "109.74.179.3";
-const DBN_SSN_ENCRYPTED = "ARxbvsVFZnYiYrkVCDOn1AE0EY955HQVMZwSOdV0eSg7QQ2kzfVIlY7Hr/D3";
+const crypto = require('crypto');
+const iv = crypto.randomBytes(12);
+const ssn = "31125461118";
+const key = Buffer.from(process.env.neonomics_raw_key, 'base64');
+const cipher = crypto.createCipheriv('aes-128-gcm', key, iv, { authTagLength: 16 });
+let enc = Buffer.concat([cipher.update(ssn), cipher.final(), cipher.getAuthTag()]);
+const DBN_SSN_ENCRYPTED = Buffer.concat([iv, enc]).toString('base64');
 async function FetchAuthToken(user, BANK, CODE) {
     switch (BANK) {
         case "deutschebank":
@@ -18,7 +24,6 @@ async function FetchAuthToken(user, BANK, CODE) {
             break;
         case "neonomics":
             if (CODE === "client_credentials") {
-                console.warn("FIRST NEONOMICS");
                 let neonomicsResponse = {};
                 let neonomicsBanks = {};
                 neonomicsResponse = await axios_1.default.post("https://sandbox.neonomics.io/auth/realms/sandbox/protocol/openid-connect/token", qs_1.default.stringify({
@@ -30,24 +35,25 @@ async function FetchAuthToken(user, BANK, CODE) {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 }).then((response) => {
-                    if (response.status === 200)
-                        return response.data;
-                    else
-                        throw new Error("Error");
-                }).catch((error) => { return error; });
+                    return response;
+                }).catch((error) => { return error.response; });
+                if (neonomicsResponse === undefined)
+                    return { error: 504, message: "We couldn't log in Neonomics, Please try again" };
+                console.warn("FIRST NEONOMICS", neonomicsResponse.data);
                 neonomicsBanks = await axios_1.default.get("https://sandbox.neonomics.io/ics/v3/banks", {
                     headers: {
-                        Authorization: "Bearer " + neonomicsResponse.accessToken,
+                        Authorization: "Bearer " + neonomicsResponse.data.access_token,
                         Accept: "application/json",
                         "x-device-id": "PayMe-" + user.id,
+                        "x-psu-id": DBN_SSN_ENCRYPTED
                     }
                 }).then((response) => {
-                    if (response.status === 200)
-                        return response.data;
-                    else
-                        throw new Error("Error");
-                }).catch((error) => { return error; });
-                return { ...neonomicsResponse, banks: neonomicsBanks };
+                    return response;
+                }).catch((error) => { return error.response; });
+                if (neonomicsBanks === undefined)
+                    return { error: 504, message: "We couldn't Fetch the available banks, Please try again" };
+                console.warn("SECOND NEONOMICS", neonomicsBanks);
+                return { ...neonomicsResponse.data, banks: neonomicsBanks.data };
             }
             else {
                 CODE = JSON.parse(CODE);
@@ -62,37 +68,43 @@ async function FetchAuthToken(user, BANK, CODE) {
                         "x-psu-id": DBN_SSN_ENCRYPTED
                     }
                 }).then((response) => {
-                    return response.data;
+                    return response;
                 }).catch((error) => {
-                    return error.response.data;
+                    return error.response;
                 });
+                if (responseBankSession === undefined)
+                    return { error: 504, message: "We couldn't Log in " + CODE.name };
+                console.warn("THIRD NEONOMICS", responseBankSession.data);
                 let responseAccounts = await axios_1.default.get("https://sandbox.neonomics.io/ics/v3/accounts", { headers: { Authorization: `Bearer ${neonomicsAuthToken}`,
                         Accept: `application/json`, "x-device-id": "PayMe-" + user.id,
-                        "x-psu-ip-address": IPADDRESS, "x-session-id": responseBankSession.sessionId,
+                        "x-psu-ip-address": IPADDRESS, "x-session-id": responseBankSession.data.sessionId,
                         "x-psu-id": DBN_SSN_ENCRYPTED
                     } }).then((response) => {
-                    return response.data;
+                    return response;
                 }).catch((error) => {
-                    return error.response.data;
+                    return error.response;
                 });
-                console.info(responseAccounts);
-                if ("errorCode" in responseAccounts && responseAccounts.errorCode == '1426') {
-                    console.warn("THIRD NEONOMICS", "errorCode" in responseAccounts, responseAccounts.errorCode == '1426');
-                    let responseConsent = await axios_1.default.get(responseAccounts.links[0].href, { headers: { Authorization: `Bearer ${neonomicsAuthToken}`,
+                if (responseAccounts === undefined)
+                    return { error: 504, message: "We couldn't fetch your bank accounts, please try again" };
+                console.warn("FOURTH NEONOMICS", "errorCode" in responseAccounts.data, responseAccounts.data);
+                if ("errorCode" in responseAccounts.data && (responseAccounts.data.errorCode == '1426' || responseAccounts.data.errorCode == '1428')) {
+                    let responseConsent = await axios_1.default.get(responseAccounts.data.links[0].href, { headers: { Authorization: `Bearer ${neonomicsAuthToken}`,
                             Accept: `application/json`, "x-device-id": "PayMe-" + user.id,
                             "x-psu-ip-address": IPADDRESS, "x-redirect-url": process.env.APP_URL + "add-account/" + CODE.name + "?code=consented",
                             "x-psu-id": DBN_SSN_ENCRYPTED
                         } }).then((response) => {
-                        return response.data;
-                    }).catch((error) => { return error.response.data; });
-                    console.warn("FINAL NEONOMICS", responseConsent);
-                    return { bank: CODE.name, ...responseBankSession, consent_url: responseConsent.links[0].href };
+                        return response;
+                    }).catch((error) => { return error.response; });
+                    if (responseConsent === undefined)
+                        return { error: 504, message: "We couldn't fetch the consent link, please try again" };
+                    console.warn("FIFTH NEONOMICS", responseConsent.data);
+                    return { bank: CODE.name, ...responseBankSession.data, consent_url: responseConsent.data.links[0].href };
                 }
-                return { bank: CODE.name, ...responseBankSession, ...responseAccounts };
+                return { bank: CODE.name, ...responseBankSession.data, ...responseAccounts.data };
             }
             break;
         default:
-            return "Not a supported Bank";
+            return { error: 400, message: "Bank not supported" };
             break;
     }
 }
