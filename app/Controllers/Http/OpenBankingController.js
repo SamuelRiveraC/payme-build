@@ -46,72 +46,69 @@ class OpenBankingController {
             return { banks: AuthToken.banks };
         }
     }
-    async urgent({ auth }) {
-        const crypto = require('crypto');
-        const iv = crypto.randomBytes(12);
-        const ssn = "31125461118";
-        const key = Buffer.from(process.env.neonomics_raw_key, 'base64');
-        const cipher = crypto.createCipheriv('aes-128-gcm', key, iv, { authTagLength: 16 });
-        let enc = Buffer.concat([cipher.update(ssn), cipher.final(), cipher.getAuthTag()]);
-        const DBN_SSN_ENCRYPTED = Buffer.concat([iv, enc]).toString('base64');
-        return DBN_SSN_ENCRYPTED;
+    async urgent({}) {
+        let user = { id: 1, first_name: "Angela", last_name: "Deutschebank" };
+        return user;
     }
-    async refreshData({ auth }) {
+    async refreshData({ auth, response }) {
         const user = await auth.authenticate();
         let newToken = {};
-        let deleted = {};
         let deutschebank = await GetToken_1.default(user, "refresh_token", "deutschebank");
         let rabobank = await GetToken_1.default(user, "refresh_token", "rabobank");
         let neonomics = await GetToken_1.default(user, "refresh_token", "Neonomics");
-        if (deutschebank) {
+        console.log(deutschebank, rabobank, neonomics);
+        if (deutschebank !== undefined && deutschebank !== null) {
             newToken = await FetchRefreshToken_1.default(user, deutschebank, "deutschebank");
-            if (newToken === undefined) {
-                return response.status(500).send({ message: "Couldn't fetch refresh tokens" });
-                deleted = await Database_1.default.from('api_tokens').where('user_id', user.id)
-                    .andWhere('name', "deutschebank").andWhere('type', "auth_token").delete();
+            if (!("error" in newToken)) {
+                await Database_1.default.from('api_tokens')
+                    .where('user_id', user.id)
+                    .andWhere('name', "deutschebank")
+                    .andWhere('type', "auth_token")
+                    .delete();
                 await auth.use('api').generate(user, {
                     name: "deutschebank", type: "auth_token",
                     token: newToken.access_token,
                     expiresIn: newToken.expires_in + " seconds"
                 });
             }
-            if (rabobank) {
-                newToken = await FetchRefreshToken_1.default(user, rabobank, "rabobank");
-                if (newToken === undefined) {
-                    return response.status(500).send({ message: "Couldn't fetch refresh tokens" });
-                    deleted = await Database_1.default.from('api_tokens').where('user_id', user.id)
-                        .andWhere('name', "rabobank").delete();
-                    await auth.use('api').generate(user, {
-                        name: "rabobank", type: "auth_token",
-                        token: newToken.access_token,
-                        expiresIn: newToken.expires_in + " seconds"
-                    });
-                    await auth.use('api').generate(user, {
-                        name: "rabobank", type: "refresh_token",
-                        token: newToken.refresh_token,
-                        expiresIn: newToken.refresh_expires_in + " seconds"
-                    });
-                }
-                if (neonomics) {
-                    newToken = await FetchRefreshToken_1.default(user, neonomics, "Neonomics");
-                    if (newToken === undefined) {
-                        return response.status(500).send({ message: "Couldn't fetch refresh tokens" });
-                        deleted = await Database_1.default.from('api_tokens').where('user_id', user.id)
-                            .andWhere('name', "Neonomics").delete();
-                        await auth.use('api').generate(user, {
-                            name: "neonomics", type: "auth_token",
-                            token: newToken.access_token,
-                            expiresIn: newToken.expires_in + " seconds"
-                        });
-                        await auth.use('api').generate(user, {
-                            name: "neonomics", type: "refresh_token",
-                            token: newToken.refresh_token,
-                            expiresIn: newToken.refresh_expires_in + " seconds"
-                        });
-                    }
-                }
+        }
+        if (rabobank !== undefined && rabobank !== null) {
+            newToken = await FetchRefreshToken_1.default(user, rabobank, "rabobank");
+            if (!("error" in newToken)) {
+                await Database_1.default.from('api_tokens').where('user_id', user.id).andWhere('name', "rabobank").delete();
+                await auth.use('api').generate(user, {
+                    name: "rabobank", type: "auth_token",
+                    token: newToken.access_token,
+                    expiresIn: newToken.expires_in + " seconds"
+                });
+                await auth.use('api').generate(user, {
+                    name: "rabobank", type: "refresh_token",
+                    token: newToken.refresh_token,
+                    expiresIn: newToken.refresh_expires_in + " seconds"
+                });
             }
         }
+        if (neonomics !== undefined && neonomics !== null) {
+            newToken = await FetchRefreshToken_1.default(user, neonomics, "Neonomics");
+            if (!("error" in newToken)) {
+                await Database_1.default.from('api_tokens').where('user_id', user.id).andWhere('name', "Neonomics").delete();
+                await auth.use('api').generate(user, {
+                    name: "neonomics", type: "auth_token",
+                    token: newToken.access_token,
+                    expiresIn: newToken.expires_in + " seconds"
+                });
+                await auth.use('api').generate(user, {
+                    name: "neonomics", type: "refresh_token",
+                    token: newToken.refresh_token,
+                    expiresIn: newToken.refresh_expires_in + " seconds"
+                });
+            }
+        }
+    }
+    async access_token({ auth, request }) {
+        const user = await auth.authenticate();
+        const bank = request.input("bank");
+        return await GetToken_1.default(user, "auth_token", bank);
     }
     async OAuthAccessAndBanks({ auth, request, response }) {
         const user = await auth.authenticate();
@@ -119,13 +116,20 @@ class OpenBankingController {
         const code = request.input("code");
         if ((bank == "deutschebank" || bank == "rabobank")) {
             let AccessToken = await FetchAccessToken_1.default(user, bank, code);
+            await Database_1.default.from('api_tokens')
+                .where('user_id', user.id)
+                .andWhere('name', bank)
+                .delete();
+            console.log(AccessToken);
             await auth.use('api').generate(user, {
                 name: bank, type: "auth_token",
                 token: AccessToken.access_token,
+                expiresIn: AccessToken.expires_in
             });
             await auth.use('api').generate(user, {
                 name: bank, type: "refresh_token",
                 token: AccessToken.refresh_token,
+                expiresIn: AccessToken.refresh_token_expires_in
             });
             let GetBankAccounts = await FetchBankAccounts_1.default(user, bank);
             if ("error" in GetBankAccounts) {
@@ -153,6 +157,7 @@ class OpenBankingController {
                 for (const [index, account] of GetBankAccounts.entries()) {
                     await BankAccount_1.default.updateOrCreate({ iban: account.iban }, {
                         user_id: user.id,
+                        resource_id: account.resourceId,
                         bank: "rabobank",
                         alias: `${account.ownerName} (${user.last_name})`,
                         balance: account.balance.amount,
@@ -164,7 +169,7 @@ class OpenBankingController {
             return GetBankAccounts;
         }
         let GetBankAccounts = await FetchBankAccounts_1.default(user, bank);
-        console.log("BANK ACCOUNTS:\n", GetBankAccounts);
+        console.log("BANK ACCOUNTS:\n", JSON.stringify(GetBankAccounts));
         if ("error" in GetBankAccounts) {
             return response.status(GetBankAccounts.error).send({ ...GetBankAccounts });
         }
@@ -173,15 +178,18 @@ class OpenBankingController {
             for (const [index, account] of GetBankAccounts.entries()) {
                 await BankAccount_1.default.updateOrCreate({ iban: account.iban }, {
                     user_id: user.id,
+                    resource_id: account.id,
                     bank: bank,
                     alias: `${account.accountName} (${user.last_name})`,
-                    balance: account.balances[0].amount,
+                    balance: account.balances[0].amount < 0 ? account.balances[0].amount * -1 : account.balances[0].amount,
                     bic: "Update pending",
                     primary: index === 0 ? 'true' : 'false',
                 });
             }
             return GetBankAccounts;
         }
+    }
+    async OAuthTransactions({ auth, request, response }) {
     }
 }
 exports.default = OpenBankingController;

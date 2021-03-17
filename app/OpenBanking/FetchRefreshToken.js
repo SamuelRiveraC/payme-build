@@ -57,6 +57,7 @@ async function FetchRefreshToken(user, refresh_token, bank) {
             }).then((response) => {
                 return response;
             }).catch((error) => { return error.response; });
+            console.log(response);
             if (response === undefined)
                 return { error: 500, message: "We couldn't fetch the refresh tokens, please try again" };
             if ("errorCode" in response.data)
