@@ -22,7 +22,7 @@ class BankAccountSeeder extends Seeder_1.default {
                 bank: "payme",
                 alias: "Checking (Ella)",
                 balance: "1000",
-                iban: 'FR0150000000000000000000',
+                iban: 'FR0150000000000000000001',
                 bic: 'DBXX FR 00 000',
                 primary: 'true'
             }

@@ -18,9 +18,10 @@ async function FetchTransactions(user, BankAccount) {
     switch (BankAccount.bank) {
         case "deutschebank":
             let DB_access_token = await GetToken_1.default(user, "auth_token", BankAccount.bank);
-            let responseDB = await axios_1.default.get("https://simulator-api.db.com/gw/dbapi/banking/transactions/v2?iban=" + BankAccount.iban, { headers: { Authorization: `Bearer ${DB_access_token}` } }).then((response) => { return response; })
+            let responseDB = await axios_1.default.get("https://simulator-api.db.com:443/gw/dbapi/banking/transactions/v2/?iban=" + BankAccount.iban + "&sortBy=bookingDate%5BDESC%5D&limit=10&offset=0", { headers: { Authorization: `Bearer ${DB_access_token}` } }).then((response) => { return response; })
                 .catch((error) => { return error.response; });
-            if (responseDB === undefined)
+            console.log(responseDB.data);
+            if (responseDB.data === undefined)
                 return [];
             if ("code" in responseDB.data)
                 return [];
@@ -28,8 +29,10 @@ async function FetchTransactions(user, BankAccount) {
                 return [];
             let transactionsDB = [];
             for (let [index, transaction] of responseDB.data.transactions.entries()) {
+                let fetch_type = transaction.amount >= 0 ? "credit" : "debit";
                 transactionsDB.push({
-                    fetch_type: transaction.amount >= 0 ? "credit" : "debit",
+                    id: transaction.paymentIdentification.replace("RTE", ""),
+                    fetch_type: fetch_type,
                     party: transaction.counterPartyName,
                     amount: transaction.amount >= 0 ? transaction.amount : transaction.amount * -1,
                     status: "1",
@@ -44,7 +47,7 @@ async function FetchTransactions(user, BankAccount) {
             let responseRB = await axios_1.default.get("https://api-sandbox.rabobank.nl/openapi/sandbox/payments/account-information/ais/accounts/" + BankAccount.resource_id + "/transactions?bookingStatus=booked", await RabobankRequestHeaderAccounts_1.default(RB_access_token))
                 .then((response) => { return response; })
                 .catch((error) => { return error.response; });
-            console.log(responseRB.data);
+            console.log(responseRB.data.transactions.booked[0]);
             if (responseRB === undefined)
                 return [];
             if ("httpCode" in responseRB.data && responseRB.data.httpCode != 200)
@@ -82,7 +85,7 @@ async function FetchTransactions(user, BankAccount) {
             for (let [index, transaction] of responseN.data.entries()) {
                 transactionsN.push({
                     fetch_type: transaction.creditDebitIndicator === "CRDT" ? "credit" : "debit",
-                    party: "NONAME",
+                    party: transaction.transactionReference,
                     amount: transaction.transactionAmount.amount,
                     status: "1",
                     created_at: transaction.bookingDate,
