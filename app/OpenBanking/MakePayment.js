@@ -5,11 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const Transaction_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/Transaction"));
 const Notification_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/Notification"));
-async function MakePayment(user, counterParty, transaction) {
+async function MakePayment(user, counterParty, transaction, type = "Payment") {
     let storedTransaction = {};
     if (transaction.id !== undefined) {
         storedTransaction = await Transaction_1.default.findOrFail(transaction.id);
         storedTransaction.status = '1';
+        storedTransaction.account_sender_id = transaction.account_sender_id;
+        storedTransaction.account_receiver_id = transaction.account_receiver_id;
         await storedTransaction.save();
         let notification = await Notification_1.default.findByOrFail('transaction_id', storedTransaction.id);
         notification.status = '1';
@@ -20,7 +22,7 @@ async function MakePayment(user, counterParty, transaction) {
         await Notification_1.default.create({
             transaction_id: storedTransaction.id,
             user_id: counterParty.id,
-            type: transaction.id !== undefined ? '1' : '0',
+            type: type === "Payment" ? '1' : '0',
             status: '0'
         });
     }

@@ -8,14 +8,21 @@ const Transaction_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/
 const BankAccount_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/BankAccount"));
 const FetchAuthToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/FetchAuthToken"));
 const FetchAccessToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/FetchAccessToken"));
-const FetchRefreshToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/FetchRefreshToken"));
 const FetchBankAccounts_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/FetchBankAccounts"));
-const FetchTransactions_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/FetchTransactions"));
 const MakePayment_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/MakePayment"));
 const GetToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/GetToken"));
 const Database_1 = __importDefault(global[Symbol.for('ioc.use')]("Adonis/Lucid/Database"));
 const axios_1 = __importDefault(require("axios"));
 const uuid_1 = require("uuid");
+const RabobankRequestHeaderTransaction_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/RabobankRequestHeaderTransaction"));
+const IPADDRESS = "109.74.179.3";
+const crypto = require('crypto');
+const iv = crypto.randomBytes(12);
+const ssn = "31125461118";
+const key = Buffer.from(process.env.neonomics_raw_key, 'base64');
+const cipher = crypto.createCipheriv('aes-128-gcm', key, iv, { authTagLength: 16 });
+let enc = Buffer.concat([cipher.update(ssn), cipher.final(), cipher.getAuthTag()]);
+const DBN_SSN_ENCRYPTED = Buffer.concat([iv, enc]).toString('base64');
 class OpenBankingController {
     async OAuthAuth({ auth, request, response }) {
         const user = await auth.authenticate();
@@ -52,71 +59,6 @@ class OpenBankingController {
             return { banks: AuthToken.banks };
         }
     }
-    async urgent({}) {
-        let user = { id: 1, first_name: "Angela", last_name: "Deutschebank" };
-        let BankAccount = { bank: "deutschebank", iban: "DE10010000000000007659" };
-        return await FetchTransactions_1.default(user, BankAccount);
-    }
-    async refreshData({ auth, response }) {
-        const user = await auth.authenticate();
-        let newToken = {};
-        let deutschebank = await GetToken_1.default(user, "refresh_token", "deutschebank");
-        let rabobank = await GetToken_1.default(user, "refresh_token", "rabobank");
-        let neonomics = await GetToken_1.default(user, "refresh_token", "Neonomics");
-        console.log(deutschebank, rabobank, neonomics);
-        if (deutschebank !== undefined && deutschebank !== null) {
-            newToken = await FetchRefreshToken_1.default(user, deutschebank, "deutschebank");
-            if (!("error" in newToken)) {
-                await Database_1.default.from('api_tokens')
-                    .where('user_id', user.id)
-                    .andWhere('name', "deutschebank")
-                    .andWhere('type', "auth_token")
-                    .delete();
-                await auth.use('api').generate(user, {
-                    name: "deutschebank", type: "auth_token",
-                    token: newToken.access_token,
-                    expiresIn: newToken.expires_in + " seconds"
-                });
-            }
-        }
-        if (rabobank !== undefined && rabobank !== null) {
-            newToken = await FetchRefreshToken_1.default(user, rabobank, "rabobank");
-            if (!("error" in newToken)) {
-                await Database_1.default.from('api_tokens').where('user_id', user.id).andWhere('name', "rabobank").delete();
-                await auth.use('api').generate(user, {
-                    name: "rabobank", type: "auth_token",
-                    token: newToken.access_token,
-                    expiresIn: newToken.expires_in + " seconds"
-                });
-                await auth.use('api').generate(user, {
-                    name: "rabobank", type: "refresh_token",
-                    token: newToken.refresh_token,
-                    expiresIn: newToken.refresh_expires_in + " seconds"
-                });
-            }
-        }
-        if (neonomics !== undefined && neonomics !== null) {
-            newToken = await FetchRefreshToken_1.default(user, neonomics, "Neonomics");
-            if (!("error" in newToken)) {
-                await Database_1.default.from('api_tokens').where('user_id', user.id).andWhere('name', "Neonomics").delete();
-                await auth.use('api').generate(user, {
-                    name: "neonomics", type: "auth_token",
-                    token: newToken.access_token,
-                    expiresIn: newToken.expires_in + " seconds"
-                });
-                await auth.use('api').generate(user, {
-                    name: "neonomics", type: "refresh_token",
-                    token: newToken.refresh_token,
-                    expiresIn: newToken.refresh_expires_in + " seconds"
-                });
-            }
-        }
-    }
-    async access_token({ auth, request }) {
-        const user = await auth.authenticate();
-        const bank = request.input("bank");
-        return await GetToken_1.default(user, "auth_token", bank);
-    }
     async OAuthAccessAndBanks({ auth, request, response }) {
         const user = await auth.authenticate();
         const bank = request.input("bank");
@@ -127,7 +69,6 @@ class OpenBankingController {
                 .where('user_id', user.id)
                 .andWhere('name', bank)
                 .delete();
-            console.log(AccessToken);
             await auth.use('api').generate(user, {
                 name: bank, type: "auth_token",
                 token: AccessToken.access_token,
@@ -197,26 +138,30 @@ class OpenBankingController {
         const transactionType = request.input("type");
         const user = await auth.authenticate();
         let counterParty = {};
-        let validateAmount = parseFloat(request.input("amount")).toFixed(2);
-        console.log("\n\n", validateAmount, "-", parseFloat(validateAmount), "\n\n");
         let transaction = {
             uuid: uuid_1.v4(),
             user_receiver_id: 0,
             user_sender_id: 0,
-            amount: validateAmount,
+            account_sender_id: 0,
+            account_receiver_id: 0,
+            amount: parseFloat((parseFloat(request.input("amount")).toFixed(2))),
             status: 0
         };
         if (transactionType === "Request") {
             counterParty = await User_1.default.findOrFail(request.input("counterParty"));
             transaction.user_sender_id = counterParty.id;
             transaction.user_receiver_id = user.id;
-            return await MakePayment_1.default(user, counterParty, transaction);
+            transaction.account_sender_id = null;
+            transaction.account_receiver_id = null;
+            return await MakePayment_1.default(user, counterParty, transaction, "Request");
         }
         else if (transactionType == "Payment") {
             transaction = (await Transaction_1.default.findOrFail(request.input("transaction"))).serialize();
             counterParty = await User_1.default.findOrFail(transaction.user_receiver_id);
             if (transaction.user_sender_id !== user.id)
                 return response.status(400).send({ code: "E_NOT_THE_USER_TRANSACTION" });
+            if (transaction.status !== 0)
+                return response.status(400).send({ code: "E_ALREADY_PAID" });
         }
         else {
             if (transactionType === "User") {
@@ -238,6 +183,8 @@ class OpenBankingController {
             return response.status(400).send({ status: 401, code: "E_RECEIVER_NO_BANK_ACCOUNT" });
         if (senderAccount.balance < transaction.amount)
             return response.status(400).send({ status: 401, code: "E_INSUFFICIENT_FUNDS" });
+        transaction.account_sender_id = senderAccount.id;
+        transaction.account_receiver_id = receiverAccount.id;
         senderAccount.balance = senderAccount.balance - transaction.amount;
         receiverAccount.balance = receiverAccount.balance + transaction.amount;
         if (senderAccount.bank === "payme") {
@@ -305,7 +252,9 @@ class OpenBankingController {
                 console.log(JSON.stringify(DBResponse));
                 if ("code" in DBResponse || DBResponse === undefined)
                     return response.status(500).send({ bank: "deutschebank", step: "sendTransaction", code: DBResponse.message ? DBResponse.message : "We can't reach Deutschebank Server" });
-                if (false) {
+                if (true) {
+                    transaction.account_sender_id = null;
+                    transaction.account_receiver_id = receiverAccount.id;
                     transaction.status = 1;
                     transaction.uuid = DBResponse.paymentId;
                     let RegisterPayment = await MakePayment_1.default(user, counterParty, transaction);
@@ -322,6 +271,88 @@ class OpenBankingController {
                         amount: transaction.amount
                     };
                 }
+            }
+        }
+        else if (senderAccount.bank === "rabobank") {
+            let transactionBody = {
+                "creditorAccount": {
+                    "currency": "EUR",
+                    "iban": receiverAccount.iban
+                },
+                "creditorName": counterParty.first_name + " " + counterParty.last_name,
+                "debtorAccount": {
+                    "currency": "EUR",
+                    "iban": senderAccount.iban
+                },
+                "instructedAmount": {
+                    "content": transaction.amount,
+                    "currency": "EUR"
+                },
+            };
+            let RB_access_token = await GetToken_1.default(user, "auth_token", "rabobank");
+            let transactionHeader = await RabobankRequestHeaderTransaction_1.default(RB_access_token, JSON.stringify(transactionBody));
+            let responseRB = await axios_1.default.post("https://api-sandbox.rabobank.nl/openapi/sandbox/payments/payment-initiation/pis/v1/payments/sepa-credit-transfers", transactionBody, transactionHeader).then((response) => {
+                return response;
+            }).catch((error) => {
+                return error.response;
+            });
+            if (responseRB.status === 200 || responseRB.status === 201) {
+                transaction.status = 1;
+                let RegisterPayment = await MakePayment_1.default(user, counterParty, transaction);
+                if ("code" in RegisterPayment)
+                    return response.status(RegisterPayment.status).send({ bank: "rabobank", step: "sendTransaction", code: RegisterPayment.code });
+                RegisterPayment.url = responseRB.data._links.scaRedirect.href;
+                await senderAccount.save();
+                await receiverAccount.save();
+                return { bank: "rabobank", step: "sendTransaction", ...RegisterPayment };
+            }
+            else {
+                return response.status(responseRB.status).send({ bank: "rabobank", code: responseRB.data.tppMessages[0].text });
+            }
+        }
+        else {
+            let neonomicsAuthToken = await GetToken_1.default(user, "auth_token", "Neonomics");
+            let neonomicsSessionId = await GetToken_1.default(user, "auth_token", senderAccount.bank);
+            let NeonomicsTransfer = await axios_1.default.post("https://sandbox.neonomics.io/ics/v3/payments/sepa-credit", {
+                "creditorAccount": {
+                    "iban": receiverAccount.iban
+                },
+                "debtorAccount": {
+                    "iban": senderAccount.iban
+                },
+                "debtorName": user.first_name + " " + user.last_name,
+                "creditorName": counterParty.first_name + " " + counterParty.last_name,
+                "remittanceInformationUnstructured": "My test payment",
+                "instrumentedAmount": transaction.amount,
+                "currency": "EUR",
+                "endToEndIdentification": transaction.uuid,
+            }, { headers: {
+                    "Authorization": `Bearer ${neonomicsAuthToken}`,
+                    "x-session-id": neonomicsSessionId,
+                    "x-device-id": `PayMe-${user.id}`,
+                    "Accept": `application/json`,
+                    "Content-Type": "application/json"
+                } }).then((response) => {
+                return response;
+            }).catch((error) => {
+                return error.response;
+            });
+            if ("errorCode" in NeonomicsTransfer.data && (NeonomicsTransfer.data.errorCode == '1426' || NeonomicsTransfer.data.errorCode == '1428')) {
+                let responseConsent = await axios_1.default.get(NeonomicsTransfer.data.links[0].href, { headers: {
+                        "Authorization": `Bearer ${neonomicsAuthToken}`,
+                        "x-session-id": neonomicsSessionId,
+                        "x-device-id": `PayMe-${user.id}`,
+                        "Accept": `application/json`,
+                        "Content-Type": "application/json",
+                        "x-redirect-url": process.env.APP_URL + "complete-transaction/neonomics/",
+                    } }).then((response) => {
+                    return response;
+                }).catch((error) => {
+                    return error.response;
+                });
+                if (responseConsent === undefined)
+                    return { error: 504, message: "We couldn't fetch the consent link, please try again" };
+                return { bank: senderAccount.bank, ...responseConsent.data, url: responseConsent.data.links[0].href };
             }
         }
     }

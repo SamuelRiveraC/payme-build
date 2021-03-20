@@ -47,6 +47,7 @@ async function GetBankAccounts(user, Bank) {
         default:
             let auth_token = await GetToken_1.default(user, "auth_token", "Neonomics");
             let sessionId = await GetToken_1.default(user, "sessionId", Bank);
+            console.log(auth_token, sessionId);
             let responseN = await axios_1.default.get("https://sandbox.neonomics.io/ics/v3/accounts", { headers: { Authorization: `Bearer ${auth_token}`,
                     Accept: `application/json`, "x-device-id": "PayMe-" + user.id,
                     "x-psu-ip-address": IPADDRESS, "x-session-id": sessionId,

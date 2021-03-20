@@ -29,15 +29,22 @@ async function FetchTransactions(user, BankAccount) {
                 return [];
             let transactionsDB = [];
             for (let [index, transaction] of responseDB.data.transactions.entries()) {
-                let fetch_type = transaction.amount >= 0 ? "credit" : "debit";
+                let fetch_type = "credit";
+                if (transaction.paymentIdentification === "XYZ") {
+                    fetch_type = transaction.amount >= 0 ? "credit" : "debit";
+                }
+                else {
+                    fetch_type = transaction.amount <= 0 ? "credit" : "debit";
+                }
                 transactionsDB.push({
-                    id: transaction.paymentIdentification.replace("RTE", ""),
                     fetch_type: fetch_type,
+                    uuid: transaction.paymentIdentification.replace("RTE", ""),
                     party: transaction.counterPartyName,
                     amount: transaction.amount >= 0 ? transaction.amount : transaction.amount * -1,
                     status: "1",
-                    created_at: transaction.bookingDate,
-                    updated_at: transaction.bookingDate
+                    created_at: transaction.bookingDate + ` 0${index}:00`,
+                    updated_at: transaction.bookingDate + ` 0${index}:00`,
+                    color: "0018a8"
                 });
             }
             return transactionsDB;
@@ -59,8 +66,9 @@ async function FetchTransactions(user, BankAccount) {
                     party: transaction.transactionAmount.amount >= 0 ? transaction.debtorName ? transaction.debtorName : "NONAME" : transaction.creditorName ? transaction.creditorName : "NONAME",
                     amount: transaction.transactionAmount.amount >= 0 ? transaction.transactionAmount.amount : transaction.transactionAmount.amount * -1,
                     status: "1",
-                    created_at: transaction.bookingDate,
-                    updated_at: transaction.bookingDate
+                    created_at: transaction.raboBookingDateTime,
+                    updated_at: transaction.raboBookingDateTime,
+                    color: "FF6600"
                 });
             }
             return transactionsRB;
@@ -81,18 +89,20 @@ async function FetchTransactions(user, BankAccount) {
                 return [];
             if ("errorCode" in responseN.data)
                 return [];
+            console.log(responseN.data);
             let transactionsN = [];
             for (let [index, transaction] of responseN.data.entries()) {
                 transactionsN.push({
                     fetch_type: transaction.creditDebitIndicator === "CRDT" ? "credit" : "debit",
                     party: transaction.transactionReference,
-                    amount: transaction.transactionAmount.amount,
+                    amount: transaction.transactionAmount.value,
                     status: "1",
                     created_at: transaction.bookingDate,
-                    updated_at: transaction.bookingDate
+                    updated_at: transaction.bookingDate,
+                    color: "1F69E5"
                 });
             }
-            return transactionsN;
+            return transactionsN.slice(0, 10);
             break;
     }
 }
