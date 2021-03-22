@@ -92,13 +92,18 @@ class RefreshController {
         let primaryAccount = user.bankAccounts.find((account) => {
             return account.primary === "true";
         });
-        if (primaryAccount !== undefined && primaryAccount.bank !== "payme") {
+        if (primaryAccount !== undefined && primaryAccount.bank == "deutschebank") {
             let GetBankAccounts = await FetchBankAccounts_1.default(user, primaryAccount.bank);
             if (GetBankAccounts.length > 0) {
                 for (const [index, account] of GetBankAccounts.entries()) {
-                    if (primaryAccount.iban === account.iban) {
+                    if (primaryAccount.iban === account.iban && primaryAccount.bank === "deutschebank") {
                         await BankAccount_1.default.updateOrCreate({ iban: account.iban, user_id: user.id }, {
                             balance: account.currentBalance,
+                        });
+                    }
+                    else if (primaryAccount.iban === account.iban) {
+                        await BankAccount_1.default.updateOrCreate({ iban: account.iban, user_id: user.id }, {
+                            balance: account.balances[0].amount < 0 ? account.balances[0].amount * -1 : account.balances[0].amount
                         });
                     }
                 }
@@ -139,14 +144,14 @@ class RefreshController {
         let transactionsAPI = [];
         if (primaryAccount !== undefined && primaryAccount.bank !== "payme") {
             transactionsAPI = await FetchTransactions_1.default(user, primaryAccount);
-            AllTransactions = AllTransactions.concat(transactionsAPI);
+            AllTransactions = AllTransactions.concat(transactionsAPI.slice(0, 9));
         }
         AllTransactions = AllTransactions.sort(function (a, b) {
             let c = new Date(a.updated_at);
             let d = new Date(b.updated_at);
             return d - c;
-        }).slice(0, 9);
-        return AllTransactions;
+        });
+        return AllTransactions.slice(0, 9);
     }
 }
 exports.default = RefreshController;

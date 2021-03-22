@@ -6,14 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const axios_1 = __importDefault(require("axios"));
 const GetToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/GetToken"));
 const RabobankRequestHeaderAccounts_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/RabobankRequestHeaderAccounts"));
-const IPADDRESS = "109.74.179.3";
-const crypto = require('crypto');
-const iv = crypto.randomBytes(12);
-const ssn = "31125461118";
-const key = Buffer.from(process.env.neonomics_raw_key, 'base64');
-const cipher = crypto.createCipheriv('aes-128-gcm', key, iv, { authTagLength: 16 });
-let enc = Buffer.concat([cipher.update(ssn), cipher.final(), cipher.getAuthTag()]);
-const DBN_SSN_ENCRYPTED = Buffer.concat([iv, enc]).toString('base64');
+const NeonomicsUniqueId_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/NeonomicsUniqueId"));
+const GetIp_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/GetIp"));
 async function GetBankAccounts(user, Bank) {
     switch (Bank) {
         case "deutschebank":
@@ -45,22 +39,27 @@ async function GetBankAccounts(user, Bank) {
             return bankAccounts;
             break;
         default:
-            let auth_token = await GetToken_1.default(user, "auth_token", "Neonomics");
-            let sessionId = await GetToken_1.default(user, "sessionId", Bank);
-            console.log(auth_token, sessionId);
-            let responseN = await axios_1.default.get("https://sandbox.neonomics.io/ics/v3/accounts", { headers: { Authorization: `Bearer ${auth_token}`,
-                    Accept: `application/json`, "x-device-id": "PayMe-" + user.id,
-                    "x-psu-ip-address": IPADDRESS, "x-session-id": sessionId,
-                    "x-psu-id": DBN_SSN_ENCRYPTED
+            let neonomicsAuthToken = await GetToken_1.default(user, "auth_token", "Neonomics");
+            let neonomicsSessionId = await GetToken_1.default(user, "sessionId", Bank);
+            let responseN = await axios_1.default.get("https://sandbox.neonomics.io/ics/v3/accounts", { headers: {
+                    "Authorization": `Bearer ${neonomicsAuthToken}`,
+                    "x-session-id": neonomicsSessionId,
+                    "x-device-id": await NeonomicsUniqueId_1.default(user),
+                    "Accept": `application/json`,
+                    "Content-Type": "application/json",
+                    "x-psu-ip-address": await GetIp_1.default(),
+                    "x-redirect-url": process.env.APP_URL + "add-account/neonomics/",
                 } }).then((response) => {
                 return response;
             }).catch((error) => {
                 return error.response;
             });
+            console.log("3 - NEONOMICS: Getting Bank Account for real ", Bank, neonomicsSessionId);
             if (responseN === undefined)
                 return { error: 504, message: "We couldn't fetch the bank accounts, please try again" };
             if ("errorCode" in responseN.data)
                 return { error: 500, message: responseN.data.errorCode + ": " + responseN.data.message };
+            console.log(JSON.stringify(responseN.data));
             return responseN.data;
             break;
     }

@@ -23,7 +23,6 @@ async function FetchAccessToken(user, BANK, CODE) {
             }).catch((error) => { return error.response.data; });
             if (deutschebankResponse === undefined)
                 return { error: 504, message: "We couldn't log in Deutschebank, Please try again" };
-            console.log(deutschebankResponse);
             return deutschebankResponse;
             break;
         case "rabobank":
