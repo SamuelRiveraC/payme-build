@@ -8,7 +8,6 @@ const User_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/User"))
 const BankAccount_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/BankAccount"));
 const Transaction_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/Transaction"));
 const Notification_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Models/Notification"));
-const GetToken_1 = __importDefault(global[Symbol.for('ioc.use')]("App/OpenBanking/GetToken"));
 class TransactionsController {
     async store({ auth, request, response }) {
         const user = await auth.authenticate();
@@ -59,7 +58,6 @@ class TransactionsController {
                 openBanking = { status: 200 };
             }
             if (request.input("bank") === "deutschebank") {
-                let DBToken = await GetToken_1.default(user, "auth_token", "deutschebank");
                 openBanking = await axios_1.default.post("https://simulator-api.db.com/gw/dbapi/paymentInitiation/payments/v1/instantSepaCreditTransfers", {
                     "debtorAccount": {
                         "iban": senderAccount.iban, "currencyCode": "EUR"
@@ -71,21 +69,11 @@ class TransactionsController {
                     "creditorAccount": {
                         "iban": receiverAccount.iban, "currencyCode": "EUR"
                     }
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${DBToken}`,
-                        otp: `${request.input("otp")}`,
-                        'idempotency-id': transaction.uuid,
+                }, { headers: { Authorization: request.input("token"), otp: request.input("otp"), 'idempotency-id': transaction.uuid, } }).then(async (response) => {
+                    if (response.status === 200 || response.status === 201) {
+                        return response;
                     }
-                }).then(async (response) => {
-                    console.log(response, DBToken);
-                    console.log(user.id, user.first_name, "auth_token", "deutschebank");
-                    return response;
-                }).catch((error) => {
-                    console.log(error.response, DBToken);
-                    console.log(user.id, user.first_name, "auth_token", "deutschebank");
-                    return error.response;
-                });
+                }).catch((error) => { return error.response; });
             }
             if (openBanking.status == 200 || openBanking.status == 201) {
                 transaction.status = "1";

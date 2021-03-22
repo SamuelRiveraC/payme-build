@@ -9,69 +9,45 @@ class UserSeeder extends Seeder_1.default {
     async run() {
         await User_1.default.updateOrCreateMany("email", [
             {
-                email: 'Angela@test.com',
-                phone: '+100000001',
+                email: 'DuPont@test.com',
+                phone: '+320001111',
                 password: 'secret',
-                first_name: 'Angela',
-                last_name: 'Deutschbank',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=AG'
+                first_name: 'Jean',
+                last_name: 'DuPont',
+                slug: 'DuPont'
             },
             {
-                email: 'Adam@test.com',
-                phone: '+100000002',
+                email: 'Mustermann@gmail.com',
+                phone: '+490001111',
                 password: 'secret',
-                first_name: 'Adam',
-                last_name: 'Deutschbank',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=AM'
+                first_name: 'Max',
+                last_name: 'Mustermann',
+                slug: 'Mustermann'
             },
             {
-                email: 'Sophie@test.com',
-                phone: '+100000003',
+                email: 'Jansen@test.com',
+                phone: '+310001111',
                 password: 'secret',
-                first_name: 'Sophie',
-                last_name: 'Rabobank',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=ST'
+                first_name: 'Jan',
+                last_name: 'Jansen',
+                slug: 'Jansen'
             },
             {
-                email: 'Lucas@test.com',
-                phone: '+100000004',
+                email: 'Smith@test.com',
+                phone: '+440001111',
                 password: 'secret',
-                first_name: 'Lucas',
-                last_name: 'Rabobank',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=LT'
-            },
-            {
-                email: 'Emma@test.com',
-                phone: '+100000005',
-                password: 'secret',
-                first_name: 'Emma',
-                last_name: 'Test',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=JP'
-            },
-            {
-                email: 'Bram@test.com',
-                phone: '+100000006',
-                password: 'secret',
-                first_name: 'Bram',
-                last_name: 'Test',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=BT'
+                first_name: 'John',
+                last_name: 'Smith',
+                slug: 'Smith'
             },
             {
                 email: 'Ozdemir@test.com',
-                phone: '+100000007',
+                phone: '+310002222',
                 password: 'secret',
                 first_name: 'Suayip',
                 last_name: 'Ozdemir',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=SO'
-            },
-            {
-                email: 'Ella@test.com',
-                phone: '+100000008',
-                password: 'secret',
-                first_name: 'Ella',
-                last_name: 'PayMe',
-                profile_picture: 'https://via.placeholder.com/160/29363D/EDF4FC?text=ET'
-            },
+                slug: 'Ozdemir'
+            }
         ]);
     }
 }
