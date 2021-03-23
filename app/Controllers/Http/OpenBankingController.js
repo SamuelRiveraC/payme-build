@@ -319,7 +319,7 @@ class OpenBankingController {
             let neonomicsAuthToken = await GetToken_1.default(user, "auth_token", "Neonomics");
             let neonomicsSessionId = await GetToken_1.default(user, "sessionId", senderAccount.bank);
             console.log("STARTING THE TRANSFER", await GetIp_1.default(), await NeonomicsUniqueId_1.default(user), neonomicsSessionId);
-            if (senderAccount.bank === "Sbanken" || senderAccount.bank === "Hizonti Bank" || senderAccount.bank === "Justo Bank") {
+            if (senderAccount.bank === "DNB" || senderAccount.bank === "Sbanken" || senderAccount.bank === "Hizonti Bank" || senderAccount.bank === "Justo Bank") {
                 transaction.status = '1';
                 console.log(senderAccount.bank, "NO VALIDATION");
                 let NeonomicsPayment = await MakePayment_1.default(user, counterParty, transaction);
@@ -450,7 +450,9 @@ class OpenBankingController {
                 return error.response;
             });
             console.log("GET PAYMENT INFO", getBackPaymentData.data);
-            if (getBackPaymentData.data.status === "ACTC" || getBackPaymentData.data.status === "ACSP" || getBackPaymentData.data.status === "ACSC") {
+            if (getBackPaymentData.data.status === "ACTC"
+                || getBackPaymentData.data.status === "ACSP"
+                || getBackPaymentData.data.status === "ACSC") {
                 transaction.status = "1";
                 let NeonomicsPayment = await MakePayment_1.default(user, counterParty, transaction, "Update");
                 await senderAccount.save();

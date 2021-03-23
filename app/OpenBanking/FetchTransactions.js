@@ -15,7 +15,7 @@ async function FetchTransactions(user, BankAccount) {
             let DB_access_token = await GetToken_1.default(user, "auth_token", BankAccount.bank);
             let responseDB = await axios_1.default.get("https://simulator-api.db.com:443/gw/dbapi/banking/transactions/v2/?iban=" + BankAccount.iban + "&sortBy=bookingDate%5BDESC%5D&limit=10&offset=0", { headers: { Authorization: `Bearer ${DB_access_token}` } }).then((response) => { return response; })
                 .catch((error) => { return error.response; });
-            if (responseDB.data === undefined)
+            if (responseDB === undefined)
                 return [];
             if ("code" in responseDB.data)
                 return [];
